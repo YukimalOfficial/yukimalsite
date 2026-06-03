@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>エンドロールメーカー</title>
+    <script src="https://cdn.jsdelivr.net/npm/ffmpeg@0.12.10/dist/ffmpeg.min.js"></script>
+    <style>
+        body { background-color: #111; color: #fff; font-family: sans-serif; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        h1 { font-size: 20px; margin-bottom: 15px; color: #aaa; }
+        .container { display: flex; gap: 20px; max-width: 1400px; width: 100%; }
+        .config-panel { flex: 1; background: #222; padding: 20px; border-radius: 8px; max-height: 90vh; overflow-y: auto; min-width: 340px; }
+        .view-panel { flex: 1.5; display: flex; flex-direction: column; align-items: center; position: relative; }
+        canvas { background: #000; border: 2px solid #444; border-radius: 4px; max-width: 100%; height: auto; cursor: default; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-size: 13px; color: #bbb; margin-bottom: 5px; font-weight: bold; }
+        textarea { width: 100%; height: 160px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; padding: 10px; box-sizing: border-box; font-size: 13px; line-height: 1.6; resi[...]
+        input[type="number"], input[type="file"], select, input[type="range"] { width: 100%; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; padding: 6px; box-sizing: border[...]
+        input[type="number"] { width: 80px; }
+        input[type="range"] { background: none; border: none; padding: 0; }
+        input[type="color"] { width: 50px; height: 30px; border: none; cursor: pointer; background: none; }
+        select { cursor: pointer; }
+        .switch-container { display: flex; align-items: center; gap: 10px; margin-top: 8px; margin-bottom: 5px; }
+        .switch-container input[type="checkbox"] { width: auto; cursor: pointer; transform: scale(1.2); }
+        .btn-group { display: flex; gap: 10px; margin-top: 20px; }
+        button { flex: 1; padding: 12px; font-size: 14px; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; }
+        .btn-preview { background: #444; color: white; }
+        .btn-record { background: #e50914; color: white; }
+        .btn-clear-bg { background: #666; color: white; padding: 8px; font-size: 12px; }
+        button:disabled { background: #555 !important; color: #888; cursor: not-allowed; }
+        #status { margin-top: 10px; font-size: 14px; color: #ffc107; font-weight: bold; }
+        audio { width: 100%; margin-top: 8px; }
+        video { display: none; }
+        
+        .tag-guide { background: #2a2a2a; padding: 10px; border-radius: 4px; font-size: 11px; color: #ccc; line-height: 1.5; border: 1px solid #444; }
+        .photo-list { background: #333; padding: 10px; border-radius: 4px; max-height: 120px; overflow-y: auto; margin-top: 8px; }
+        .photo-item { display: flex; align-items: center; justify-content: space-between; background: #444; padding: 6px; margin-bottom: 5px; border-radius: 4px; font-size: 12px; }
+        .photo-item img { height: 30px; border-radius: 2px; object-fit: cover; }
+        .photo-item button { flex: none; padding: 4px 8px; font-size: 11px; background: #d9534f; color: white; width: auto; }
+        .bg-info { font-size: 11px; color: #aaa; margin-top: 4px; }
+    </style>
+</head>
+<body>
+
+    <h1>エンドロールメーカー</h1>
+
+    <div class="container">
+        <div class="config-panel">
+            <div class="form-group">
+                <label for="text-input">エンドロールの文字</label>
+                <textarea id="text-input" oninput="onTextChange()">[T] THE MOVIE
+[Y] Directed by Christopher Nolan
+
+[C] Producer : Emma Thomas
+[C] Music by : Hans Zimmer
+
+[T] THANK YOU FOR WATCHING</textarea>
+                
+                <div class="tag-guide">
+                    <strong>【特殊タグ】</strong> [T]巨大化 / [Y]黄色 / [G]緑 / [R]赤 / [B]青 / [M]等幅 / [C]左右2列分割
+                </div>
+            </div>
+
+            <div class="form-group" style="background:#333; padding:10px; border-radius:4px; border:1px solid #555;">
+                <label for="scroll-slider" style="color:#ffc107;">🔍 停止中の表示位置（文字を確認する）</label>
+                <input type="range" id="scroll-slider" min="0" max="1000" value="0" oninput="onSliderMove(this.value)">
+            </div>
+            
+            <div class="form-group">
+                <label>🖼️ 背景写真・画像をアップロード</label>
+                <input type="file" id="bg-image-input" accept="image/*" onchange="loadBgImage(this)">
+            </div>
+
+            <div class="form-group">
+                <label>🎬 背景動画をアップロード</label>
+                <input type="file" id="bg-video-input" accept="video/*" onchange="loadBgVideo(this)">
+                <div class="bg-info">※ 背景画像と背景動画の両方がある場合は動画が優先されます</div>
+                <button class="btn-clear-bg" onclick="clearBgVideo()">背景動画をクリア</button>
+            </div>
+
+            <div class="form-group" style="background:#2b2b2b; padding:12px; border-radius:6px; border:1px solid #444;">
+                <label>📸 一緒にスクロールさせる写真をアップロード</label>
+                <input type="file" id="multi-photo-input" accept="image/*" multiple onchange="addPhotos(this)">
+                <div class="bg-info">※ 停止中に選択すると青い枠が出ます。右下の角を引っ張ってサイズ変更、上の円を回してサイズ変更できます。</div>
+                <div class="photo-list" id="photo-list-container">
+                    <div style="color:#888; text-align:center; font-size:12px; padding:10px;">写真がありません</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>背景音楽（BGM）の設定</label>
+                <div class="switch-container">
+                    <input type="checkbox" id="use-bgm" checked onchange="toggleBgmSection()">
+                    <label for="use-bgm" style="display:inline; margin:0; font-weight:normal;">動画にBGMをつける</label>
+                </div>
+                <div id="bgm-upload-section">
+                    <input type="file" id="bgm-input" accept="audio/*" onchange="loadAudio(this)">
+                    <audio id="bgm-player" controls style="display:none;"></audio>
+                </div>
+            </div>
+            
+            <div class="form-group" style="display: flex; gap: 15px; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 120px;">
+                    <label for="font-family-input">フォントの種類</label>
+                    <select id="font-family-input" onchange="onTextChange()">
+                        <option value="sans-serif">ゴシック体</option>
+                        <option value="serif">明朝体</option>
+                    </select>
+                </div>
+                <div style="flex: 1; min-width: 120px;">
+                    <label for="align-input">文字の寄せ方</label>
+                    <select id="align-input" onchange="onTextChange()">
+                        <option value="center">中央寄せ</option>
+                        <option value="left">左寄せ</option>
+                        <option value="right">右寄せ</option>
+                    </select>
+                </div>
+                <div style="min-width: 80px;">
+                    <label for="color-input">文字の色</label>
+                    <input type="color" id="color-input" value="#ffffff" onchange="onTextChange()">
+                </div>
+            </div>
+            
+            <div class="form-group" style="display: flex; gap: 20px;">
+                <div>
+                    <label for="speed-input">流れる速度</label>
+                    <input type="number" id="speed-input" value="2" min="1" max="10">
+                </div>
+                <div>
+                    <label for="font-size-input">文字サイズ (px)</label>
+                    <input type="number" id="font-size-input" value="40" min="20" max="80" onchange="onTextChange()">
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn-preview" id="btn-preview" onclick="startPreview()">▶ プレビュー再生</button>
+                <button class="btn-record" id="btn-record" onclick="startRecording()">🎬 動画を書き出し（MP4）</button>
+            </div>
+            
+            <div id="status"></div>
+        </div>
+
+        <div class="view-panel">
+            <canvas id="movieCanvas" width="1280" height="720"></canvas>
+        </div>
+    </div>
+
+    <video id="bgVideo" style="display:none;"></video>
+
+    <script>
+        const canvas = document.getElementById("movieCanvas");
+        const ctx = canvas.getContext("2d");
+        const bgmPlayer = document.getElementById("bgm-player");
+        const bgVideo = document.getElementById("bgVideo");
+        let animationId;
+        let mediaRecorder;
+        let recordedChunks = [];
+        let isRecording = false;
+        let isPlaying = false; 
+        let audioContext, audioSource, audioDestination;
+        
+        let bgImage = null;
+        let bgVideoLoaded = false;
+        let photos = []; 
+        let selectedPhoto = null; 
+        let isDragging = false;
+        let isResizing = false;
+        let isRotating = false;
+        
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let startWidth = 0;
+        let startHeight = 0;
+        let startAngle = 0;
+        let startMouseAngle = 0;
+        
+        let showCenterXLine = false;
+        let showCenterYLine = false;
+        let currentScrollY = 0; 
+
+        const handleSize = 10;
+        const rotateHandleDistance = 30;
+        let FFmpeg;
+
+        window.onload = function() {
+            updateSliderMax();
+            drawStaticScene();
+            loadFFmpeg();
+        };
+
+        async function loadFFmpeg() {
+            const { FFmpeg: FFmpegLib, fetchFile } = FFmpeg;
+            FFmpeg = new FFmpegLib.FFmpeg();
+            
+            await FFmpeg.load({
+                coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.js',
+            });
+        }
+
+        function onTextChange() {
+            updateSliderMax();
+            drawStaticScene();
+        }
+
+        function onSliderMove(value) {
+            if (isPlaying || isRecording) return;
+            currentScrollY = parseInt(value);
+            renderScene(currentScrollY);
+        }
+
+        function updateSliderMax() {
+            const text = document.getElementById("text-input").value;
+            const defaultFontSize = parseInt(document.getElementById("font-size-input").value);
+            const lines = text.split("\n");
+            
+            let totalHeight = 0;
+            for (let i = 0; i < lines.length; i++) {
+                let currentLine = lines[i];
+                let isTitle = (currentLine.indexOf("[T]") === 0);
+                let currentLineSize = isTitle ? defaultFontSize * 1.4 : defaultFontSize;
+                totalHeight += currentLineSize * 1.5;
+            }
+            
+            const slider = document.getElementById("scroll-slider");
+            slider.max = canvas.height + totalHeight;
+        }
+
+        function loadBgImage(input) {
+            const file = input.files[0];
+            if (file) {
+                const img = new Image();
+                img.src = URL.createObjectURL(file);
+                img.onload = function() {
+                    bgImage = img;
+                    drawStaticScene();
+                    document.getElementById("status").innerText = "🖼️ 背景写真がセットされました。";
+                };
+            }
+        }
+
+        function loadBgVideo(input) {
+            const file = input.files[0];
+            if (file) {
+                bgVideo.src = URL.createObjectURL(file);
+                bgVideo.onloadedmetadata = function() {
+                    bgVideoLoaded = true;
+                    bgVideo.loop = true;
+                    bgVideo.muted = true;
+                    drawStaticScene();
+                    document.getElementById("status").innerText = "🎬 背景動画がセットされました。";
+                };
+            }
+        }
+
+        function clearBgVideo() {
+            bgVideo.src = "";
+            bgVideoLoaded = false;
+            document.getElementById("bg-video-input").value = "";
+            document.getElementById("status").innerText = "背景動画がクリアされました。";
+            drawStaticScene();
+        }
+
+        function addPhotos(input) {
+            const files = input.files;
+            if (!files) return;
+            
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const img = new Image();
+                img.src = URL.createObjectURL(file);
+                img.onload = (function(fileName) {
+                    return function() {
+                        const pWidth = 200;
+                        const pHeight = 200 * (img.height / img.width);
+                        const photoObj = {
+                            id: Date.now() + Math.random(),
+                            img: img,
+                            name: fileName,
+                            x: canvas.width / 2 - pWidth / 2,
+                            y: canvas.height / 2 - pHeight / 2 + currentScrollY, 
+                            width: pWidth,
+                            height: pHeight,
+                            angle: 0
+                        };
+                        photos.push(photoObj);
+                        selectedPhoto = photoObj;
+                        updatePhotoListUI();
+                        drawStaticScene();
+                    };
+                })(file.name);
+            }
+            input.value = "";
+        }
+
+        function updatePhotoListUI() {
+            const container = document.getElementById("photo-list-container");
+            if (photos.length === 0) {
+                container.innerHTML = '<div style="color:#888; text-align:center; font-size:12px; padding:10px;">写真がありません</div>';
+                return;
+            }
+            container.innerHTML = "";
+            for (let i = 0; i < photos.length; i++) {
+                const p = photos[i];
+                const item = document.createElement("div");
+                item.className = "photo-item";
+                
+                if (selectedPhoto && selectedPhoto.id === p.id) {
+                    item.style.border = "1px solid #00c8ff";
+                    item.style.background = "#555";
+                }
+                
+                const imgTag = document.createElement("img");
+                imgTag.src = p.img.src;
+                
+                const nameTag = document.createElement("span");
+                nameTag.innerText = p.name.substring(0, 12) + "...";
+                nameTag.style.marginLeft = "10px";
+                nameTag.style.flex = "1";
+                
+                const delBtn = document.createElement("button");
+                delBtn.innerText = "削除";
+                delBtn.onclick = (function(id) {
+                    return function() { deletePhoto(id); };
+                })(p.id);
+                
+                item.appendChild(imgTag);
+                item.appendChild(nameTag);
+                item.appendChild(delBtn);
+                container.appendChild(item);
+            }
+        }
+
+        function deletePhoto(id) {
+            if (selectedPhoto && selectedPhoto.id === id) {
+                selectedPhoto = null;
+            }
+            photos = photos.filter(function(p) { return p.id !== id; });
+            updatePhotoListUI();
+            drawStaticScene();
+        }
+
+        function drawStaticScene() {
+            if (isPlaying || isRecording) return;
+            const slider = document.getElementById("scroll-slider");
+            currentScrollY = parseInt(slider.value);
+            renderScene(currentScrollY);
+        }
+
+        function toggleBgmSection() {
+            const useBgm = document.getElementById("use-bgm").checked;
+            const uploadSection = document.getElementById("bgm-upload-section");
+            if (useBgm) {
+                uploadSection.style.opacity = "1";
+                uploadSection.style.pointerEvents = "auto";
+            } else {
+                uploadSection.style.opacity = "0.4";
+                uploadSection.style.pointerEvents = "none";
+                if (bgmPlayer.paused === false) { bgmPlayer.pause(); }
+            }
+        }
+
+        function loadAudio(input) {
+            const file = input.files[0];
+            if (file) {
+                bgmPlayer.src = URL.createObjectURL(file);
+                bgmPlayer.style.display = "block";
+                initAudioContext();
+                document.getElementById("status").innerText = "BGMが読み込まれました。";
+            }
+        }
+
+        function initAudioContext() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                audioSource = audioContext.createMediaElementSource(bgmPlayer);
+                audioDestination = audioContext.createMediaStreamDestination();
+                audioSource.connect(audioContext.destination);
+                audioSource.connect(audioDestination);
+            }
+        }
+
+        function getCanvasMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            return {
+                x: (e.clientX - rect.left) * scaleX,
+                y: (e.clientY - rect.top) * scaleY
+            };
+        }
+
+        canvas.addEventListener("mousedown", function(e) {
+            if (isPlaying || isRecording) return;
+            const pos = getCanvasMousePos(e);
+
+            if (selectedPhoto) {
+                const p = selectedPhoto;
+                const renderY = p.y - currentScrollY;
+                const cx = p.x + p.width / 2;
+                const cy = renderY + p.height / 2;
+
+                const dx = pos.x - cx;
+                const dy = pos.y - cy;
+                const cos = Math.cos(-p.angle);
+                const sin = Math.sin(-p.angle);
+                const rx = dx * cos - dy * sin;
+                const ry = dx * sin + dy * cos;
+
+                const rotX = 0;
+                const rotY = -p.height / 2 - rotateHandleDistance;
+                if (Math.abs(rx - rotX) < handleSize && Math.abs(ry - rotY) < handleSize) {
+                    isRotating = true;
+                    startAngle = p.angle;
+                    startMouseAngle = Math.atan2(pos.y - cy, pos.x - cx);
+                    return;
+                }
+
+                const cornerX = p.width / 2;
+                const cornerY = p.height / 2;
+                if (Math.abs(rx - cornerX) < handleSize && Math.abs(ry - cornerY) < handleSize) {
+                    isResizing = true;
+                    startWidth = p.width;
+                    startHeight = p.height;
+                    dragStartX = rx;
+                    dragStartY = ry;
+                    return;
+                }
+
+                if (rx >= -p.width / 2 && rx <= p.width / 2 && ry >= -p.height / 2 && ry <= p.height / 2) {
+                    isDragging = true;
+                    dragStartX = rx;
+                    dragStartY = ry;
+                    return;
+                }
+            }
+
+            selectedPhoto = null;
+            for (let i = photos.length - 1; i >= 0; i--) {
+                const p = photos[i];
+                const renderY = p.y - currentScrollY;
+                const cx = p.x + p.width / 2;
+                const cy = renderY + p.height / 2;
+
+                const dx = pos.x - cx;
+                const dy = pos.y - cy;
+                const cos = Math.cos(-p.angle);
+                const sin = Math.sin(-p.angle);
+                const rx = dx * cos - dy * sin;
+                const ry = dx * sin + dy * cos;
+
+                if (rx >= -p.width / 2 && rx <= p.width / 2 && ry >= -p.height / 2 && ry <= p.height / 2) {
+                    selectedPhoto = p;
+                    isDragging = true;
+                    dragStartX = rx;
+                    dragStartY = ry;
+                    
+                    photos.splice(i, 1);
+                    photos.push(selectedPhoto);
+                    break;
+                }
+            }
+            updatePhotoListUI();
+            drawStaticScene();
+        });
+
+        canvas.addEventListener("mousemove", function(e) {
+            if (!selectedPhoto) return;
+            const pos = getCanvasMousePos(e);
+            const p = selectedPhoto;
+            const renderY = p.y - currentScrollY;
+            const cx = p.x + p.width / 2;
+            const cy = renderY + p.height / 2;
+
+            if (isRotating) {
+                const currentMouseAngle = Math.atan2(pos.y - cy, pos.x - cx);
+                p.angle = startAngle + (currentMouseAngle - startMouseAngle);
+                drawStaticScene();
+                return;
+            }
+
+            if (isResizing) {
+                const dx = pos.x - cx;
+                const dy = pos.y - cy;
+                const cos = Math.cos(-p.angle);
+                const sin = Math.sin(-p.angle);
+                const rx = dx * cos - dy * sin;
+
+                const ratio = startHeight / startWidth;
+                const scale = rx / dragStartX; 
+                
+                const newWidth = Math.max(30, startWidth * scale);
+                const newHeight = newWidth * ratio;
+
+                p.x = cx - newWidth / 2;
+                p.y = (cy - newHeight / 2) + currentScrollY;
+                p.width = newWidth;
+                p.height = newHeight;
+
+                drawStaticScene();
+                return;
+            }
+
+            if (isDragging) {
+                const cos = Math.cos(p.angle);
+                const sin = Math.sin(p.angle);
+                const worldX = dragStartX * cos - dragStartY * sin;
+                const worldY = dragStartX * sin + dragStartY * cos;
+                
+                let targetCenterX = pos.x - worldX;
+                let targetCenterY = pos.y - worldY;
+
+                const canvasCenterX = canvas.width / 2;
+                const canvasCenterY = canvas.height / 2;
+                const snapThreshold = 15;
+
+                if (Math.abs(targetCenterX - canvasCenterX) < snapThreshold) {
+                    targetCenterX = canvasCenterX;
+                    showCenterXLine = true;
+                } else {
+                    showCenterXLine = false;
+                }
+
+                if (Math.abs(targetCenterY - canvasCenterY) < snapThreshold) {
+                    targetCenterY = canvasCenterY;
+                    showCenterYLine = true;
+                } else {
+                    showCenterYLine = false;
+                }
+
+                p.x = targetCenterX - p.width / 2;
+                p.y = (targetCenterY - p.height / 2) + currentScrollY;
+
+                drawStaticScene();
+            }
+        });
+
+        window.addEventListener("mouseup", function() {
+            isDragging = false;
+            isResizing = false;
+            isRotating = false;
+            showCenterXLine = false;
+            showCenterYLine = false;
+            drawStaticScene();
+        });
+
+        function renderScene(yOffset) {
+            const text = document.getElementById("text-input").value;
+            const defaultFontSize = parseInt(document.getElementById("font-size-input").value);
+            const fontName = document.getElementById("font-family-input").value;
+            const textAlign = document.getElementById("align-input").value;
+            const defaultColor = document.getElementById("color-input").value;
+            const lines = text.split("\n");
+
+            // 背景の描画：動画が優先される
+            if (bgVideoLoaded && bgVideo.readyState >= 2) {
+                ctx.drawImage(bgVideo, 0, 0, canvas.width, canvas.height);
+            } else if (bgImage) {
+                ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+            } else {
+                ctx.fillStyle = "#000000";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            ctx.textBaseline = "top";
+            let currentY = canvas.height - yOffset;
+
+            for (let i = 0; i < lines.length; i++) {
+                let currentLine = lines[i];
+                let currentFontSize = defaultFontSize;
+                let currentFontColor = defaultColor;
+                let currentFontFamily = fontName;
+                let currentAlign = textAlign;
+                let isColumnSplit = false;
+
+                // 複数タグに対応
+                if (currentLine.indexOf("[T]") === 0) {
+                    currentFontSize = Math.floor(defaultFontSize * 1.4);
+                    currentLine = currentLine.substring(3).trim();
+                }
+                if (currentLine.indexOf("[Y]") === 0) {
+                    currentFontColor = "#ffff00";
+                    currentLine = currentLine.substring(3).trim();
+                }
+                if (currentLine.indexOf("[G]") === 0) {
+                    currentFontColor = "#00ff00";
+                    currentLine = currentLine.substring(3).trim();
+                }
+                if (currentLine.indexOf("[R]") === 0) {
+                    currentFontColor = "#ff0000";
+                    currentLine = currentLine.substring(3).trim();
+                }
+                if (currentLine.indexOf("[B]") === 0) {
+                    currentFontColor = "#00c8ff";
+                    currentLine = currentLine.substring(3).trim();
+                }
+                if (currentLine.indexOf("[M]") === 0) {
+                    currentFontFamily = "monospace";
+                    currentLine = currentLine.substring(3).trim();
+                }
+                if (currentLine.indexOf("[C]") === 0) {
+                    isColumnSplit = true;
+                    currentLine = currentLine.substring(3).trim();
+                }
+
+                let currentLineHeight = currentFontSize * 1.5;
+
+                if (currentY > -currentLineHeight) {
+                    if (currentY < canvas.height) {
+                        ctx.fillStyle = currentFontColor;
+                        
+                        if (isColumnSplit) {
+                            let parts = currentLine.split(":");
+                            let leftText = "";
+                            let rightText = "";
+                            if (parts.length > 0) { leftText = parts[0].trim(); }
+                            if (parts.length > 1) { rightText = parts[1].trim(); }
+                            
+                            ctx.font = "bold " + currentFontSize + "px " + currentFontFamily;
+                            ctx.textAlign = "right";
+                            ctx.fillText(leftText, (canvas.width / 2) - 20, currentY);
+                            ctx.textAlign = "left";
+                            ctx.fillText(rightText, (canvas.width / 2) + 20, currentY);
+                        } else {
+                            let xPosition = canvas.width / 2;
+                            if (currentAlign === "left") { xPosition = 50; }
+                            if (currentAlign === "right") { xPosition = canvas.width - 50; }
+                            
+                            ctx.textAlign = currentAlign;
+                            ctx.font = "bold " + currentFontSize + "px " + currentFontFamily;
+                            ctx.fillText(currentLine, xPosition, currentY);
+                        }
+                    }
+                }
+                currentY += currentLineHeight;
+            }
+
+            // 写真の描画
+            for (let j = 0; j < photos.length; j++) {
+                const p = photos[j];
+                const renderY = p.y - yOffset;
+                
+                ctx.save();
+                ctx.translate(p.x + p.width / 2, renderY + p.height / 2);
+                ctx.rotate(p.angle);
+                ctx.drawImage(p.img, -p.width / 2, -p.height / 2, p.width, p.height);
+                ctx.restore();
+            }
+
+            // 選択写真の編集枠
+            if (selectedPhoto) {
+                if (isPlaying === false && isRecording === false) {
+                    const p = selectedPhoto;
+                    const renderY = p.y - yOffset;
+                    
+                    ctx.save();
+                    ctx.translate(p.x + p.width / 2, renderY + p.height / 2);
+                    ctx.rotate(p.angle);
+                    
+                    ctx.strokeStyle = "#00c8ff";
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(-p.width / 2, -p.height / 2, p.width, p.height);
+                    
+                    ctx.fillStyle = "#00c8ff";
+                    ctx.fillRect(p.width / 2 - handleSize / 2, p.height / 2 - handleSize / 2, handleSize, handleSize);
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(0, -p.height / 2);
+                    ctx.lineTo(0, -p.height / 2 - rotateHandleDistance);
+                    ctx.stroke();
+                    
+                    ctx.beginPath();
+                    ctx.arc(0, -p.height / 2 - rotateHandleDistance, handleSize / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.restore();
+                }
+            }
+
+            // ドラッグ中のガイドライン
+            if (isDragging) {
+                if (isPlaying === false && isRecording === false) {
+                    ctx.save();
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = "#ff3333";
+                    
+                    if (showCenterXLine) {
+                        ctx.beginPath();
+                        ctx.moveTo(canvas.width / 2, 0);
+                        ctx.lineTo(canvas.width / 2, canvas.height);
+                        ctx.stroke();
+                    }
+                    if (showCenterYLine) {
+                        ctx.beginPath();
+                        ctx.moveTo(0, canvas.height / 2);
+                        ctx.lineTo(canvas.width, canvas.height / 2);
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                }
+            }
+        }
+
+        function startAnimationLoop(onComplete) {
+            const speed = parseFloat(document.getElementById("speed-input").value);
+            const slider = document.getElementById("scroll-slider");
+            const maxScrollDistance = parseFloat(slider.max);
+            currentScrollY = 0;
+
+            // 背景動画がある場合は再生開始
+            if (bgVideoLoaded) {
+                bgVideo.currentTime = 0;
+                bgVideo.play().catch(function(e){ console.log(e); });
+            }
+
+            function animate() {
+                renderScene(currentScrollY);
+                slider.value = currentScrollY;
+                currentScrollY += speed;
+
+                if (currentScrollY > maxScrollDistance) {
+                    cancelAnimationFrame(animationId);
+                    if (bgVideoLoaded) {
+                        bgVideo.pause();
+                    }
+                    if (onComplete) { onComplete(); }
+                } else {
+                    animationId = requestAnimationFrame(animate);
+                }
+            }
+            cancelAnimationFrame(animationId);
+            animate();
+        }
+
+        function startPreview() {
+            if (isRecording) { return; }
+            if (isPlaying) { return; }
+            isPlaying = true;
+            document.getElementById("status").innerText = "プレビュー再生中...";
+
+            const useBgm = document.getElementById("use-bgm").checked;
+            if (useBgm) {
+                if (bgmPlayer.src) {
+                    bgmPlayer.currentTime = 0;
+                    bgmPlayer.play().catch(function(e){ console.log(e); });
+                }
+            }
+
+            startAnimationLoop(function() {
+                if (bgmPlayer.src) { bgmPlayer.pause(); }
+                if (bgVideoLoaded) { bgVideo.pause(); }
+                document.getElementById("status").innerText = "プレビューが終了しました。";
+                isPlaying = false;
+                document.getElementById("scroll-slider").value = 0;
+                drawStaticScene();
+            });
+        }
+
+        function startRecording() {
+            if (isRecording) { return; }
+            if (isPlaying) { return; }
+            isRecording = true;
+            recordedChunks = [];
+
+            const statusDiv = document.getElementById("status");
+            const btnRecord = document.getElementById("btn-record");
+            const btnPreview = document.getElementById("btn-preview");
+            const useBgm = document.getElementById("use-bgm").checked;
+
+            btnRecord.disabled = true;
+            btnPreview.disabled = true;
+            statusDiv.innerText = "動画作成中...（そのままお待ちください）";
+
+            const videoStream = canvas.captureStream(60);
+            let combinedStream = new MediaStream(videoStream.getVideoTracks());
+
+            if (useBgm) {
+                if (bgmPlayer.src) {
+                    initAudioContext();
+                    const audioTracks = audioDestination.stream.getAudioTracks();
+                    for (let i = 0; i < audioTracks.length; i++) {
+                        combinedStream.addTrack(audioTracks[i]);
+                    }
+                    bgmPlayer.currentTime = 0;
+                    bgmPlayer.play().catch(function(e){ console.log(e); });
+                }
+            }
+
+            let options = { mimeType: "video/webm;codecs=vp9,opus" };
+            if (MediaRecorder.isTypeSupported(options.mimeType) === false) {
+                options = { mimeType: "video/webm" };
+            }
+
+            mediaRecorder = new MediaRecorder(combinedStream, options);
+
+            mediaRecorder.ondataavailable = function(e) {
+                if (e.data.size > 0) { recordedChunks.push(e.data); }
+            };
+
+            mediaRecorder.onstop = function() {
+                if (bgmPlayer.src) { bgmPlayer.pause(); }
+                if (bgVideoLoaded) { bgVideo.pause(); }
+
+                const blob = new Blob(recordedChunks, { type: "video/webm" });
+                convertToMP4AndDownload(blob, useBgm, statusDiv, btnRecord, btnPreview);
+            };
+
+            mediaRecorder.start();
+            startAnimationLoop(function() { mediaRecorder.stop(); });
+        }
+
+        async function convertToMP4AndDownload(webmBlob, useBgm, statusDiv, btnRecord, btnPreview) {
+            try {
+                const { fetchFile } = FFmpeg;
+                
+                if (!FFmpeg.isLoaded()) {
+                    statusDiv.innerText = "FFmpegを初期化中...";
+                    await FFmpeg.load({
+                        coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/ffmpeg-core.js',
+                    });
+                }
+
+                statusDiv.innerText = "MP4に変換中...（この処理には数十秒かかる場合があります）";
+
+                const fileData = await fetchFile(webmBlob);
+                FFmpeg.writeFile("input.webm", fileData);
+
+                const outputFileName = useBgm && bgmPlayer.src ? "endroll_with_bgm.mp4" : "endroll_silent.mp4";
+                
+                await FFmpeg.exec([
+                    "-i", "input.webm",
+                    "-c:v", "libx264",
+                    "-preset", "medium",
+                    "-crf", "23",
+                    "-c:a", "aac",
+                    "-b:a", "192k",
+                    outputFileName
+                ]);
+
+                const data = FFmpeg.readFile(outputFileName);
+                const mp4Blob = new Blob([data.buffer], { type: "video/mp4" });
+                
+                const url = URL.createObjectURL(mp4Blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = outputFileName;
+                document.body.appendChild(a);
+                a.click();
+
+                setTimeout(function() {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    FFmpeg.deleteFile("input.webm");
+                    FFmpeg.deleteFile(outputFileName);
+                    
+                    statusDiv.innerText = "ダウンロードが完了しました！";
+                    btnRecord.disabled = false;
+                    btnPreview.disabled = false;
+                    isRecording = false;
+                    document.getElementById("scroll-slider").value = 0;
+                    drawStaticScene();
+                }, 100);
+
+            } catch (err) {
+                console.error("MP4変換エラー:", err);
+                statusDiv.innerText = "エラーが発生しました: " + err.message;
+                btnRecord.disabled = false;
+                btnPreview.disabled = false;
+                isRecording = false;
+            }
+        }
+    </script>
+</body>
+</html>
