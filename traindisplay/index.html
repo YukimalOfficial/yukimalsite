@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8"><title>3色LED シミュレーター</title>
+    <link rel="preconnect" href="https://googleapis.com"><link rel="preconnect" href="https://gstatic.com" crossorigin><link href="https://googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+    <style>
+        body{background:#111;color:#fff;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;padding:40px 20px;margin:0}
+        .led-container{position:relative;width:800px;height:90px;background:#050505;border:6px solid #252525;border-radius:6px;overflow:hidden;box-shadow:inset 0 0 20px #000;margin-bottom:30px;display:flex;align-items:center}
+        .led-text{position:absolute;white-space:nowrap;font-family:'DotGothic16',sans-serif;font-size:58px;letter-spacing:4px;color:#f90;text-shadow:0 0 8px #f50}
+        .led-text span.g{color:#3f3;text-shadow:0 0 8px #0a0} .led-text span.r{color:#f22;text-shadow:0 0 8px #a00} .led-text span.y{color:#f90;text-shadow:0 0 8px #f50} 
+        .color-amber{color:#f90!important;text-shadow:0 0 8px #f50!important} .color-green{color:#3f3!important;text-shadow:0 0 8px #0a0!important} .color-red{color:#f22!important;text-shadow:0 0 8px #a00!important}
+        .color-amber span,.color-green span,.color-red span{color:inherit!important;text-shadow:inherit!important}
+        .led-dot-mask{position:absolute;top:0;left:0;width:100%;height:100%;z-index:10;pointer-events:none;background-image:linear-gradient(90deg,rgba(0,0,0,.72) 1px,transparent 1px),linear-gradient(0deg,rgba(0,0,0,.72) 1px,transparent 1px);background-size:3px 3px}
+        .mode-center-layout{position:relative;width:100%;text-align:center}
+        .apply-blink{animation:blink-ani .8s step-end infinite!important} @keyframes blink-ani{0%,100%{opacity:1}50%{opacity:0}}
+        #renderCanvas{display:none}
+        .admin-panel{width:800px;background:#1e1e1e;border:1px solid #2d2d2d;border-radius:8px;padding:25px;box-sizing:border-box}
+        .form-group{margin-bottom:15px;display:flex;flex-direction:column;gap:5px} label{font-size:14px;color:#aaa;font-weight:bold}
+        input[type="text"]{width:100%;padding:10px;font-size:15px;background:#0a0a0a;border:1px solid #3c3c3c;color:#fff;border-radius:4px;box-sizing:border-box}
+        .row{display:flex;gap:15px;margin-bottom:15px} .row .form-group{flex:1}
+        select{padding:10px;font-size:16px;background:#0a0a0a;border:1px solid #3c3c3c;color:#fff;border-radius:4px}
+        button{width:100%;padding:14px;font-size:16px;font-weight:bold;color:#fff;border:none;border-radius:4px;cursor:pointer}
+        .btn-update{background:#007bc3} button:hover{opacity:0.9}
+        .record-section{margin-top:20px;padding-top:20px;border-top:1px dashed #444}
+        .btn-download{background:#28a745} .btn-download.processing{background:#555}
+        .hint { font-size: 12px; color: #888; margin-top: 2px; } #current-status{text-align:center;color:#666;font-size:14px;margin-bottom:15px}
+        @keyframes led-scroll{0%{transform:translateX(800px)}100%{transform:translateX(-100%)}}
+    </style>
+</head>
+<body>
+
+    <div class="led-container" id="ledDisplayBox"><div class="led-text" id="ledText"></div><div class="led-dot-mask"></div></div>
+    <canvas id="renderCanvas" width="800" height="90"></canvas>
+    <div id="current-status">表示ステータス: 待機中</div>
+
+    <div class="admin-panel">
+        <div class="form-group">
+            <label for="inputText">表示する文字列 <span class="hint">※[g:文字]で緑、[r:文字]で赤、[y:文字]で橙</span></label>
+            <input type="text" id="inputText" value="まもなく [g:新宿] です。中央線、山手線はお乗り換えです。">
+        </div>
+        <div class="row">
+            <div class="form-group"><label for="colorSelect">LEDの色</label><select id="colorSelect"><option value="custom">個別設定優先</option><option value="amber">橙色</option><option value="green">緑色</option><option value="red">赤色</option></select></div>
+            <div class="form-group"><label for="modeSelect">表示モード</label><select id="modeSelect"><option value="scroll">実車風スクロール</option><option value="blink">点滅</option><option value="fixed">中央固定</option></select></div>
+        </div>
+        <button class="btn-update" onclick="applyCustomText()">LED表示を更新する</button>
+        <div class="record-section"><button id="downloadBtn" class="btn-download" onclick="exportMP4OneShot()">💾 このLED表示をMP4動画で直接保存</button></div>
+    </div>
+
+    <script>
+        const ledText=document.getElementById("ledText"),statusDiv=document.getElementById("current-status"),downloadBtn=document.getElementById("downloadBtn"),canvas=document.getElementById("renderCanvas"),ctx=canvas.getContext("2d");
+        let mediaRecorder,recordedChunks=[],isRecording=false,timerId;
+        function parseTags(t){return t.replace(/\[g:(.*?)\]/g,'<span class="g">$1</span>').replace(/\[r:(.*?)\]/g,'<span class="r">$1</span>').replace(/\[y:(.*?)\]/g,'<span class="y">$1</span>')}
+        function getLen(t){return t.replace(/\[[gry]:(.*?)\]/g,'$1').length}
+        function calcDurationSec(){
+            if(document.getElementById("modeSelect").value!=="scroll")return 4.0;
+            return ((800+(ledText.offsetWidth||(getLen(document.getElementById("inputText").value)*58)))/160);
+        }
+        function applyCustomText(){
+            const raw=document.getElementById("inputText").value,col=document.getElementById("colorSelect").value,mod=document.getElementById("modeSelect").value;
+            ledText.innerHTML=parseTags(raw); ledText.style.animation='none'; ledText.className='led-text'; ledText.offsetHeight;
+            if(col!=="custom")ledText.classList.add(`color-${col}`);
+            if(mod==="scroll"){
+                ledText.style.animation=`led-scroll ${calcDurationSec()}s steps(${Math.ceil((800+ledText.offsetWidth)/3)}) infinite`; statusDiv.innerText="表示ステータス: スクロール中";
+            }else if(mod==="blink"){ledText.classList.add("mode-center-layout","apply-blink");statusDiv.innerText="表示ステータス: 点滅中";
+            }else{ledText.classList.add("mode-center-layout");statusDiv.innerText="表示ステータス: 固定表示中"}
+        }
+        function exportMP4OneShot(){
+            if(isRecording)return; recordedChunks=[]; isRecording=true; applyCustomText();
+            downloadBtn.innerText="⏳ MP4保存中..."; downloadBtn.classList.add("processing"); statusDiv.innerText="動画ファイルを生成中...";
+            const isScroll=(document.getElementById("modeSelect").value==="scroll"),durationSec=calcDurationSec();
+            let frame=0,totalFrames=Math.ceil(durationSec*30); const stream=canvas.captureStream(30);
+            mediaRecorder=new MediaRecorder(stream,{mimeType:'video/webm;codecs=vp9'});
+            mediaRecorder.ondataavailable=(e)=>{if(e.data.size>0)recordedChunks.push(e.data)};
+            mediaRecorder.onstop=()=>{
+                const blob=new Blob(recordedChunks,{type:'video/mp4'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+                a.href=url;a.download='led-display.mp4';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+                downloadBtn.innerText="💾 このLED表示をMP4動画で直接保存"; downloadBtn.classList.remove("processing"); statusDiv.innerText="ダウンロード完了しました！"; applyCustomText();
+            };
+            mediaRecorder.start();
+            
+            const tokens=[]; const regex=/(\[[gry]:.*?\]|[^\[]+)/g; let m;
+            while((m=regex.exec(document.getElementById("inputText").value))!==null){
+                let t=m[0];
+                if(t.startsWith('[g:'))tokens.push({t:t.slice(3,-1),c:'#3f3',s:'#0a0'});
+                else if(t.startsWith('[r:'))tokens.push({t:t.slice(3,-1),c:'#f22',s:'#a00'});
+                else if(t.startsWith('[y:'))tokens.push({t:t.slice(3,-1),c:'#f90',s:'#f50'});
+                else tokens.push({t:t,c:'#f90',s:'#f50'});
+            }
+            const gc=document.getElementById("colorSelect").value;
+            if(gc!=="custom"){const c=gc==='green'?'#3f3':gc==='red'?'#f22':'#f90',s=gc==='green'?'#0a0':gc==='red'?'#a00':'#f50';tokens.forEach(t=>{t.c=c;t.s=s})}
+
+            function renderFrame(){
+                if(!isRecording)return; if(frame>totalFrames){isRecording=false;clearTimeout(timerId);mediaRecorder.stop();return}
+                ctx.fillStyle="#050505";ctx.fillRect(0,0,800,90);ctx.save();ctx.font="58px 'DotGothic16'";ctx.textBaseline="middle";
+                if(!isScroll){
+                    ctx.textAlign="center";if(document.getElementById("modeSelect").value!=="blink"||(frame%24<12))drawCanvasSpans(tokens,400,45,true);
+                }else{ctx.textAlign="left";drawCanvasSpans(tokens,Math.round((800-(frame*5.333))/3)*3,45,false)}
+                ctx.restore();ctx.fillStyle="rgba(0,0,0,.72)";
+                for(let x=0;x<800;x+=3)ctx.fillRect(x,0,1,90);for(let y=0;y<90;y+=3)ctx.fillRect(0,y,800,1);
+                frame++; timerId=setTimeout(renderFrame,1000/30); // 【修正】30fps固定タイマーで速度を完全均等化
+            }
+            renderFrame();
+        }
+        function drawCanvasSpans(tokens,startX,y,isC){
+            ctx.letterSpacing="4px";
+            if(isC){
+                let tw=0;tokens.forEach(t=>{tw+=ctx.measureText(t.t).width+(t.t.length*4)});let cx=startX-tw/2;
+                tokens.forEach(t=>{ctx.fillStyle=t.c;ctx.shadowColor=t.s;ctx.shadowBlur=6;ctx.fillText(t.t,cx,y);cx+=ctx.measureText(t.t).width+(t.t.length*4)});
+            }else{
+                let cx=startX;tokens.forEach(t=>{ctx.fillStyle=t.c;ctx.shadowColor=t.s;ctx.shadowBlur=6;ctx.fillText(t.t,cx,y);cx+=ctx.measureText(t.t).width+(t.t.length*4)});
+            }
+        }
+        applyCustomText();
+    </script>
+</body>
+</html>
