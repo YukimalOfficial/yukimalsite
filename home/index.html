@@ -1,1 +1,239 @@
-<h1>hello</h1>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>個人用公式ファンサイト</title>
+    <style>
+        /* 全体のサイバー感・ダーク感の設定 */
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #ffffff;
+            margin: 0;
+            padding: 0;
+            background-color: #0a0a12;
+            background-image: radial-gradient(circle at 50% 50%, #1a1a2e 0%, #0a0a12 100%);
+            letter-spacing: 0.05em;
+        }
+
+        /* アニメ風のメインビジュアル（ヘッダー） */
+        header {
+            text-align: center;
+            padding: 8rem 1rem;
+            position: relative;
+            border-bottom: 4px solid #00f0ff;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+            background: linear-gradient(135deg, #0d001a 0%, #000511 100%);
+        }
+
+        /* ネオンに光るタイトル */
+        header h1 {
+            margin: 0;
+            font-size: 3.5rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            color: #fff;
+            text-shadow: 0 0 10px #ff007f, 0 0 20px #ff007f, 0 0 40px #ff007f;
+            animation: pulse 2s infinite alternate;
+        }
+
+        header p {
+            margin: 1rem 0 0;
+            font-size: 1.2rem;
+            color: #00f0ff;
+            text-shadow: 0 0 5px #00f0ff;
+            font-weight: bold;
+        }
+
+        /* メインコンテンツのレイアウト */
+        .container {
+            max-width: 900px;
+            margin: 4rem auto;
+            padding: 0 1.5rem;
+        }
+
+        /* メカニカルな枠線デザインのセクション */
+        section {
+            background: rgba(16, 16, 28, 0.85);
+            padding: 2.5rem;
+            margin-bottom: 3rem;
+            border-left: 5px solid #ff007f;
+            border-right: 1px solid rgba(255, 0, 127, 0.2);
+            border-top: 1px solid rgba(255, 0, 127, 0.2);
+            border-bottom: 1px solid rgba(255, 0, 127, 0.2);
+            border-radius: 0 15px 0 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+
+        /* アニメ公式サイト風の見出し */
+        section h2 {
+            font-size: 1.8rem;
+            margin-top: 0;
+            border-bottom: 1px dashed #00f0ff;
+            padding-bottom: 0.5rem;
+            color: #00f0ff;
+            text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+        }
+
+        /* 【新機能】NEWSタブ（スクロール付きタイムライン） */
+        .news-container {
+            max-height: 250px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        /* スクロールバーのデザインをサイバー風にカスタム */
+        .news-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .news-container::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .news-container::-webkit-scrollbar-thumb {
+            background: #00f0ff;
+            border-radius: 3px;
+        }
+
+        /* ニュースの一行 */
+        .news-item {
+            display: flex;
+            align-items: flex-start;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 1rem 0;
+            font-size: 0.95rem;
+        }
+        .news-item:last-child {
+            border-bottom: none;
+        }
+
+        /* ニュースの日付 */
+        .news-date {
+            font-weight: bold;
+            color: #ff007f;
+            text-shadow: 0 0 5px rgba(255, 0, 127, 0.3);
+            min-width: 110px;
+        }
+
+        /* ニュースのラベル（INFO、MEDIAなど） */
+        .news-badge {
+            background: #00f0ff;
+            color: #0a0a12;
+            font-size: 0.75rem;
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 3px;
+            margin-right: 15px;
+            text-transform: uppercase;
+        }
+        .news-badge.important {
+            background: #ff007f;
+            color: #fff;
+            box-shadow: 0 0 8px #ff007f;
+        }
+
+        /* ニュースの本文 */
+        .news-text {
+            flex: 1;
+        }
+
+        /* ステータス風の箇条書き */
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+        li {
+            margin-bottom: 0.8rem;
+            padding-left: 1.5rem;
+            position: relative;
+        }
+        li::before {
+            content: "◆";
+            position: absolute;
+            left: 0;
+            color: #ff007f;
+            text-shadow: 0 0 5px #ff007f;
+        }
+
+        /* フッター */
+        footer {
+            text-align: center;
+            padding: 3rem;
+            color: #4a4a6a;
+            font-size: 0.8rem;
+            border-top: 1px solid #1a1a2e;
+        }
+
+        /* タイトルが怪しく明滅するアニメーション */
+        @keyframes pulse {
+            0% { opacity: 0.9; text-shadow: 0 0 10px #ff007f, 0 0 20px #ff007f; }
+            100% { opacity: 1; text-shadow: 0 0 15px #ff007f, 0 0 30px #ff007f, 0 0 50px #ff007f; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- メインビジュアル -->
+    <header>
+        <h1>PROJECT: YOUR NAME</h1>
+        <p>— 運命を書き換える、個人の軌跡。 —</p>
+    </header>
+
+    <div class="container">
+        
+        <!-- 【NEWSセクション】 -->
+        <section>
+            <h2>NEWS（最新情報）</h2>
+            <div class="news-container">
+                <!-- ニュース項目 1 -->
+                <div class="news-item">
+                    <span class="news-date">2026.06.04</span>
+                    <span class="news-badge important">INFO</span>
+                    <div class="news-text">個人用公式ホームページに「NEWSタブ」が電撃追加されました！</div>
+                </div>
+                <!-- ニュース項目 2 -->
+                <div class="news-item">
+                    <span class="news-date">2026.05.20</span>
+                    <span class="news-badge">MEDIA</span>
+                    <div class="news-text">メインビジュアルおよび新機能のアップデートロードマップを公開。</div>
+                </div>
+                <!-- ニュース項目 3 -->
+                <div class="news-item">
+                    <span class="news-date">2026.05.01</span>
+                    <span class="news-badge">INFO</span>
+                    <div class="news-text">コードネーム「あなたの名前」開発プロジェクトが始動しました。</div>
+                </div>
+                <!-- ニュース項目 4（スクロール確認用テスト） -->
+                <div class="news-item">
+                    <span class="news-date">2026.04.15</span>
+                    <span class="news-badge">SYSTEM</span>
+                    <div class="news-text">過去のログ：初期システムサーバーの構築に成功しました。</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- キャラクター紹介風のプロフィール -->
+        <section>
+            <h2>CHARACTER（自己紹介）</h2>
+            <p><strong>【コードネーム: あなたの名前】</strong></p>
+            <p>現代を生きるWebクリエイター。独自のガジェットとプログラミングスキルを武器に、デジタルの海で活動を続ける謎の人物。好物は美味しい珈琲。</p>
+        </section>
+
+        <!-- パラメータ風のスキル・趣味 -->
+        <section>
+            <h2>STATUS（能力・趣味）</h2>
+            <ul>
+                <li><strong>HTML / CSS:</strong> 階級 A (Webサイトの構築・装飾が可能)</li>
+                <li><strong>JavaScript:</strong> 階級 B (ギミックの実装が可能)</li>
+                <li><strong>特殊能力:</strong> 映画の徹夜鑑賞、どこでも即座に睡眠可能</li>
+            </ul>
+        </section>
+    </div>
+
+    <!-- フッター -->
+    <footer>
+        <p>&copy; PROJECT YOURNAME COMMITTEE. All Rights Reserved.</p>
+    </footer>
+
+</body>
+</html>
